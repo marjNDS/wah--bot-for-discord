@@ -2,179 +2,164 @@ import discord
 from discord.ext import commands
 import random
 import configparser
-
 # memes: https://imgur.com/a/eATq2Lq
 
+
 config = configparser.ConfigParser()
-
 config.read('config.ini')
-
 token = config.get('Config', 'token')
 
 bot = commands.Bot(command_prefix=">", intents=discord.Intents.all())
 
-
 @bot.event
 async def on_ready():
     print("Wah! I'm Online! :3")
-
+# TODO: 1. Arrumar o print pra só printar todos os dados caso tenha 2 ou mais; 2. Dar um jeito no crit check
 
 #######################
-# FUNCOES FORA DO BOT
+# FUNÇÕES AUXILIARES
 ######################
 
 # FUNCOES PARA ROLAGEM
-def sumString(txt):
-    total = 0
-    i = 0
-    while i < len(txt):
-        temp = ''
-        # print("no for") #DEBUG
-        if txt[i] == '+' or txt[i] == '-':
-            op = txt[i]
-            i += 1
-            while i < len(txt) and txt[i] != '+' and txt[i] != '-':
-                temp += txt[i]
-                # print(f"Dentro do while. i = {i} txt[i]={txt[i]} temp = {temp}") #DEBUG
-                i += 1
 
-            if op == '+':
-                total += int(temp)
-            elif op == '-':
-                total -= int(temp)
-    return total
+# retorna um vetor de x números aleatórios num intervalo de [1, y]
+async def dice(before, after):
+    diceResults = []
+    for _ in range(before):
+        diceResults.append(random.randint(1, after))
+    return diceResults
 
 
-def checkCrit(before, after, result):
+# rola vários dados
+async def dices(repeat, before, after):
+    dicesResults = []
+    for _ in range(repeat):
+        dicesResults.append(await dice(before, after))
+    return dicesResults
+
+
+# destaca dados maximos e minimos
+async def checkMaxMin(val, after):
     string = ''
-    if int(before) == 1 and int(after) == 20 and result == 20:
-        string = "**Critical success!**\n"
-    elif int(before) == 1 and int(after) == 20 and result == 1:
-        string = "**Critical fail!**\n"
+    if val == after:
+        string += "**"
+        string += str(val)
+        string += "**"
+    elif val == 1:
+        string += "*"
+        string += str(val)
+        string += "*"
+    else:
+        string += str(val)
 
     return string
 
 
-def printDice(vet):
-    string = '('
-    for i in range(0, len(vet), 1):
-        if i < len(vet) - 1:
-            string += str(vet[i])
-            string += ', '
+# destaca criticos
+async def checkCrit(before, after, val):
+    if before == 1 and after == 20:
+        if val == 20:
+            return "\n**Critical success!**\n"
+        elif val == 1:
+            return "\n**Critical fail!**\n"
+    else:
+        return ""
+
+
+# transforma os resultados dos dados para uma string formatada para o discord
+async def diceToString(diceList, after, total):
+    string = f"**`{total}`** ← ("
+    for element in diceList[:-1]:
+        temp = await checkMaxMin(element, after)
+        string += temp
+        string += ", "
+    string += await checkMaxMin(diceList[-1], after)
+    string += ')'
+
+    return string
+
+
+# transforma a string para comportar multiplas rolagens
+async def dicesToString(diceLists):
+    string = ''
+    for row in diceLists:
+        string += row
+        string += '\n'
+    return string
+
+
+# retorna uma lista com: before, after, ops a partir de uma string
+async def stripStr(string):
+    before = ''
+    after = ''
+    ops = ''
+    opsTotal = 0
+
+    ops = list(string.partition('d'))
+    before = ops[0]
+    before = before or '1'  # fornece um valor padrão quando a string é vazia
+    ops = ops[2]
+
+    idx = -1
+    for char in ops:
+        if char.isdigit():
+            after += char
         else:
-            string += str(vet[i])
-            string += ')'
-    return string
+            idx = ops.find(char)
+            break
 
+    if idx > 0:
+        ops = ops[idx:]
+    else:
+        ops = ''
 
-def printDiceSeveral(vet):
-    out = ''
-    for i in range(0, len(vet), 1):
-        out += '('
-        for j in range(0, len(vet[i]), 1):
-            out += str(vet[i][j])
-            if j < len(vet[i]) - 1:
-                out += ', '
-        out += ') '
-    return out
+    # A função all() em Python retorna True se todos os elementos de uma sequência são verdadeiros (ou se a sequência está vazia). Se pelo menos um elemento for falso, all() retorna False.
+    isSafe = all(c.isdigit() or c in ['+', '-'] for c in ops)
+
+    if isSafe and ops:
+        opsTotal = eval(ops)
+
+    arr = [int(before), int(after), ops, opsTotal]
+    return arr
 
 
 #######################
-#    DADOS
+#    COMANDO DADOS
 ######################
 
 
-@bot.command(pass_context=True, aliases=['r', 'roll'])
-async def dice(ctx, string, times=0):
-    before = ""
-    after = ""
-    sum = ""
+@bot.command(pass_context=True, aliases=['r'])
+async def roll(ctx, string: str):
+    before, after, ops, opsTotal = await stripStr(str(string))
 
-    checkD = False
-    checkOp = False
-
-    for i in range(0, len(string), 1):
-        if not checkOp:
-            if string[i] == '+' or string[i] == '-':
-                checkOp = True
-                sum += string[i]
-            elif string[i] == 'd':
-                checkD = True
-            elif not checkD:
-                before += string[i]
-            else:
-                after += string[i]
-        else:
-            sum += string[i]
-
-    total = 0
-    rand = []
-
-    before = before or '1' #fornece um valor padrão quando a string é vazia
-
-    for i in range(0, int(before), 1):
-        temp = random.randint(1, int(after))
-        total += temp
-        if temp == int(after) or temp == 1:
-            temp = '**' + str(temp) + '**'
-
-        rand.append(temp)
-
+    diceResult = await dice(before, after)
+    total = sum(diceResult) + opsTotal
+    rollsString = await diceToString(diceResult, after, total)
 
     await ctx.send(f" **{ctx.author.mention}'s rollin'! :game_die: **\n"
-                   f"**Dado {before}d{after}:** {printDice(rand)}{sum}\n"
-                   f"{checkCrit(before, after, total)}"
-                   f"**Total:** {total + sumString(sum)}")
+                   f"**Dado {before}d{after}:** \n{rollsString}{ops}\n"
+                   )
 
     await ctx.message.delete()
 
 
-@bot.command(pass_context=True, aliases=['rm', 'rollm', 'rollmultiple'])
-async def diceSeveral(ctx, vezes: int, string):
-    before = ""
-    after = ""
-    sum = ""
+@bot.command(pass_context=True, aliases=['rm'])
+async def rollMultiple(ctx, times: int, string: str):
+    before, after, ops, opsTotal = await stripStr(str(string))
+    dicesResult = await dices(times, before, after)
 
-    checkD = False
-    checkOp = False
-
-    for i in range(0, len(string), 1):
-        if not checkOp:
-            if string[i] == '+' or string[i] == '-':
-                checkOp = True
-                sum += string[i]
-            elif string[i] == 'd':
-                checkD = True
-            elif not checkD:
-                before += string[i]
-            else:
-                after += string[i]
-        else:
-            sum += string[i]
-    if before == '':
-        before = '1'
-
+    rollsString = []
     total = 0
-    rand = []
-    rands = []
-    totals = []
 
-    for i in range(0, vezes, 1):
-        total = 0
-        for j in range(0, int(before), 1):
-            temp = random.randint(1, int(after))
-            total += temp
-            if temp == int(after) or temp == 1:
-                temp = '**' + str(temp) + '**'
+    for row in dicesResult:
+        total = sum(row) + opsTotal
+        rollsString.append(await diceToString(row, after, total))
 
-            rand.append(temp)
-        totals.append(total + sumString(sum))
-        rands.append(rand)
-        rand = []
+    rollsString = await dicesToString(rollsString)
 
     await ctx.send(f" **{ctx.author.mention}'s rollin'! :game_die: **\n"
-                   f"**{vezes} dados {before}d{after}:** {printDiceSeveral(rands)}{sum}\n"
-                   f"**Totais:** {printDice(totals)}")
+                   f"**{times} dados {before}d{after}{ops}:** \n{rollsString}\n"
+                   )
 
     await ctx.message.delete()
 
@@ -236,7 +221,6 @@ async def meme_tom(ctx):
 @bot.command(aliases=['emotional', 'emotionaldamage'])
 async def meme_emotional(ctx):
     await ctx.send('https://i.imgur.com/2MfDILx.gif')
-
 
 
 bot.run(token)

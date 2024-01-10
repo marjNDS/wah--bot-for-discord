@@ -1,2 +1,0 @@
-# wah! bot for discord
- 
