@@ -2,6 +2,8 @@ import discord
 from discord.ext import commands
 import random
 import configparser
+import dice
+
 # memes: https://imgur.com/a/eATq2Lq
 
 
@@ -16,112 +18,6 @@ async def on_ready():
     print("Wah! I'm Online! :3")
 # TODO: 1. Arrumar o print pra só printar todos os dados caso tenha 2 ou mais; 2. Dar um jeito no crit check
 
-#######################
-# FUNÇÕES AUXILIARES
-######################
-
-# FUNCOES PARA ROLAGEM
-
-# retorna um vetor de x números aleatórios num intervalo de [1, y]
-async def dice(before, after):
-    diceResults = []
-    for _ in range(before):
-        diceResults.append(random.randint(1, after))
-    return diceResults
-
-
-# rola vários dados
-async def dices(repeat, before, after):
-    dicesResults = []
-    for _ in range(repeat):
-        dicesResults.append(await dice(before, after))
-    return dicesResults
-
-
-# destaca dados maximos e minimos
-async def checkMaxMin(val, after):
-    string = ''
-    if val == after:
-        string += "**"
-        string += str(val)
-        string += "**"
-    elif val == 1:
-        string += "*"
-        string += str(val)
-        string += "*"
-    else:
-        string += str(val)
-
-    return string
-
-
-# destaca criticos
-async def checkCrit(before, after, val):
-    if before == 1 and after == 20:
-        if val == 20:
-            return "\n**Critical success!**\n"
-        elif val == 1:
-            return "\n**Critical fail!**\n"
-    else:
-        return ""
-
-
-# transforma os resultados dos dados para uma string formatada para o discord
-async def diceToString(diceList, after, total):
-    string = f"**`{total}`** ← ("
-    for element in diceList[:-1]:
-        temp = await checkMaxMin(element, after)
-        string += temp
-        string += ", "
-    string += await checkMaxMin(diceList[-1], after)
-    string += ')'
-
-    return string
-
-
-# transforma a string para comportar multiplas rolagens
-async def dicesToString(diceLists):
-    string = ''
-    for row in diceLists:
-        string += row
-        string += '\n'
-    return string
-
-
-# retorna uma lista com: before, after, ops a partir de uma string
-async def stripStr(string):
-    before = ''
-    after = ''
-    ops = ''
-    opsTotal = 0
-
-    ops = list(string.partition('d'))
-    before = ops[0]
-    before = before or '1'  # fornece um valor padrão quando a string é vazia
-    ops = ops[2]
-
-    idx = -1
-    for char in ops:
-        if char.isdigit():
-            after += char
-        else:
-            idx = ops.find(char)
-            break
-
-    if idx > 0:
-        ops = ops[idx:]
-    else:
-        ops = ''
-
-    # A função all() em Python retorna True se todos os elementos de uma sequência são verdadeiros (ou se a sequência está vazia). Se pelo menos um elemento for falso, all() retorna False.
-    isSafe = all(c.isdigit() or c in ['+', '-'] for c in ops)
-
-    if isSafe and ops:
-        opsTotal = eval(ops)
-
-    arr = [int(before), int(after), ops, opsTotal]
-    return arr
-
 
 #######################
 #    COMANDO DADOS
@@ -130,11 +26,11 @@ async def stripStr(string):
 
 @bot.command(pass_context=True, aliases=['r'])
 async def roll(ctx, string: str):
-    before, after, ops, opsTotal = await stripStr(str(string))
+    before, after, ops, opsTotal = await dice.strip_str(str(string))
 
-    diceResult = await dice(before, after)
+    diceResult = await dice.dice(before, after)
     total = sum(diceResult) + opsTotal
-    rollsString = await diceToString(diceResult, after, total)
+    rollsString = await dice.dice_to_string(diceResult, after, total)
 
     await ctx.send(f" **{ctx.author.mention}'s rollin'! :game_die: **\n"
                    f"**Dado {before}d{after}:** \n{rollsString}{ops}\n"
@@ -145,17 +41,17 @@ async def roll(ctx, string: str):
 
 @bot.command(pass_context=True, aliases=['rm'])
 async def rollMultiple(ctx, times: int, string: str):
-    before, after, ops, opsTotal = await stripStr(str(string))
-    dicesResult = await dices(times, before, after)
+    before, after, ops, opsTotal = await dice.strip_str(str(string))
+    dicesResult = await dice.dices(times, before, after)
 
     rollsString = []
     total = 0
 
     for row in dicesResult:
         total = sum(row) + opsTotal
-        rollsString.append(await diceToString(row, after, total))
+        rollsString.append(await dice.dice_to_string(row, after, total))
 
-    rollsString = await dicesToString(rollsString)
+    rollsString = await dice.dices_to_string(rollsString)
 
     await ctx.send(f" **{ctx.author.mention}'s rollin'! :game_die: **\n"
                    f"**{times} dados {before}d{after}{ops}:** \n{rollsString}\n"
