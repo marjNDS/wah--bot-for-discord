@@ -29,12 +29,20 @@ async def roll(ctx, string: str):
     before, after, ops, opsTotal = await dice.strip_str(str(string))
 
     diceResult = await dice.dice(before, after)
+    # diceResult = await dice.debug_return_list(1) # DEBUG
+    crit_check = await dice.check_crit(before,after, diceResult[0])
     total = sum(diceResult) + opsTotal
-    rollsString = await dice.dice_to_string(diceResult, after, total)
+    rollsString = await dice.dice_to_string(diceResult, after, total, crit_check=True)
 
-    await ctx.send(f" **{ctx.author.mention}'s rollin'! :game_die: **\n"
-                   f"**Dado {before}d{after}:** \n{rollsString}{ops}\n"
-                   )
+    if crit_check:
+        await ctx.send(f" **{ctx.author.mention}'s rollin'! :game_die: **\n"
+                    f"**Dado {before}d{after}:** \n{rollsString}{ops}\n"
+                    f"{crit_check}"
+                    )
+    else:
+        await ctx.send(f" **{ctx.author.mention}'s rollin'! :game_die: **\n"
+            f"**Dado {before}d{after}:** \n{rollsString}{ops}\n"
+            )
 
     await ctx.message.delete()
 
@@ -55,6 +63,21 @@ async def rollMultiple(ctx, times: int, string: str):
 
     await ctx.send(f" **{ctx.author.mention}'s rollin'! :game_die: **\n"
                    f"**{times} dados {before}d{after}{ops}:** \n{rollsString}\n"
+                   )
+
+    await ctx.message.delete()
+
+@bot.command(pass_context=True, aliases=['mr'])
+async def roll_mahou(ctx, string: str):
+
+    before, after, ops, opsTotal = [int(string),6,'',0]
+
+    diceResult = await dice.dice(before, after)
+    total = 0 # sum(diceResult) + opsTotal
+    rollsString = await dice.dice_to_string(diceResult, after, total, to_sort=True, success_check=5)
+
+    await ctx.send(f" **{ctx.author.mention}'s rollin'! :magic_wand: **\n"
+                   f"**{before}d{after}s:** \n{rollsString}{ops}\n"
                    )
 
     await ctx.message.delete()

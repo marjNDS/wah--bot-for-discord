@@ -1,6 +1,11 @@
 import random
 
 
+async def debug_return_list(number):
+    list = [number]
+    return list
+
+
 async def dice(before, after):
     """
     Rolls a die in a 'before d after' format. Exemple: 2d6, 1d20, 4d4.
@@ -29,27 +34,37 @@ async def dices(repeat, before, after):
     return dices_results
 
 
-async def check_max_min(val, after):
+def bold_text(string: str):
+    bold_string = '**'
+    bold_string += string
+    bold_string += "**"
+    return bold_string
+
+def italic_text(string: str):
+    italic_string = '*'
+    italic_string += string
+    italic_string += "*"
+    return italic_string
+
+def crit_format(val, after):
     """
     checks if a value corresponds to a maximum or a minimum in a die.
     :param val: the value to be checked
     :param after: the maximum value it can be
     :return: a string formatted for discord with bold maximums and itallic minimums
     """
-    string = ''
+    val = str(val)
     if val == after:
-        string += "**"
-        string += str(val)
-        string += "**"
+        return bold_text(val)
+
     elif val == 1:
-        string += "*"
-        string += str(val)
-        string += "*"
+        return italic_text(val)
+    
     else:
-        string += str(val)
+        return val
 
-    return string
-
+def success_format(success, value):
+    return bold_text(value)
 
 # destaca criticos
 async def check_crit(before, after, val):
@@ -70,7 +85,7 @@ async def check_crit(before, after, val):
         return ""
 
 
-async def dice_to_string(dice_list, after, total):
+async def dice_to_string(dice_list, after, total, to_sort=False, crit_check=False, success_check=0):
     """
     Transforms a list of die results into a formatted string for discord.
     :param dice_list: the list of dice results
@@ -78,20 +93,49 @@ async def dice_to_string(dice_list, after, total):
     :param total: the roll that was given as input (exemple: 2d6)
     :return: a formatted string with the results.
     """
-    string = f"**`{total}`** ← ("
-    for element in dice_list[:-1]:
-        temp = await check_max_min(element, after)
+
+    # str that will be returned
+    string = ''
+
+    if not success_check:
+        string += f"**`{total}`** ← ("
+    else:
+        string += "("
+
+    if to_sort:
+        dice_list.sort(reverse=True)
+
+    # counts the successes in case its needed
+    successes = 0
+    
+
+
+    for element in dice_list:
+        temp = ''
+        if crit_check:
+            temp = crit_format(element, after)
+        if element >= success_check:
+            temp = success_format(success_check, str(element))
+            successes += 1
+
+        if not temp:
+            temp = str(element)
+                
         string += temp
         string += ", "
-    string += await check_max_min(dice_list[-1], after)
+
+    string = string[:-2]
     string += ')'
+
+    if success_check:
+        string += f"\n**`{successes}` sucessos**"
 
     return string
 
 
 async def dices_to_string(dice_lists):
     """
-    Transforms a list of lists of dice into a formatted string for discord.
+    Transforms a list of lists of dice into a formatted string for discord: this functions adds a line break after each row.
     :param dice_lists: the list of lists of dice
     :return: string formatted for discord with the dice results.
     """
